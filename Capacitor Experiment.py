@@ -46,54 +46,67 @@ def cap_discharge(x, Vcc, tc) :
 
 class arduino() :
     def __init__(self) :
+        self.connected = False
+        
         self.port = '/dev/ttyACM0'
         self.baud = 115200
         self.serial = Arduino(self.port, self.baud, timeout=1, eol='/')
         
+        """
         if self.port not in self.serial.get_avail_ports() :
             self.port = self.serial.get_avail_ports()[0]
             self.serial.port = self.port
+        """
         
-        self.Vcc = 5.
-        self.R = 0
-        self.C = 0
-        self.exp_dur_factor = 0
-        self.samples_per_tc = 0
-        self.pulse_duration = 0
-        self.pulse_duty_cycle = 0
+        self.Vcc = -1
+        self.R = -1
+        self.C = -1
+        self.exp_dur_factor = -1
+        self.pulse_duration = -1
+        self.pulse_duty_cycle = -1
         
         self.dis_charge_choice = 1
     
     def connect(self) :
-        print( "Please wait while a connection is established.")
-        
-        connection_result = self.serial.connect()
-        
-        if connection_result != 'Success' :
-            print( self.serial.get_avail_ports() )
-            print( 'Failed to connect to the Arduino' )
-        else :
-            attempts = 5
-            while not self.serial.test_connection() :
-                attempts -= 1
-                if attempts <= 0 :
-                    print( 'Failed to confirm a good connection.' )
-                    return False
-                time_sleep( 0.15 )
-            self.update_all_parameters()
-        
-        self.serial.send_command('z')
-        print( 'Connected Successfully.' )
+        if not self.connected :
+            connection_result = self.serial.connect()
+            
+            if connection_result == 'Success' :
+                self.connected = True
+                attempts = 5
+                while not self.serial.test_connection() :
+                    attempts -= 1
+                    if attempts <= 0 :
+                        return False
+                    time_sleep( 0.15 )
+                self.update_all_parameters()
+            
+            self.serial.send_command('z')
+            
+        return self.connected
+    
+    def disconnect(self) :
+        if self.connected :
+            self.serial.disconnect()
     
     def update_all_parameters(self) :
-        self.Vcc = self.serial.get_parameter('k', 'f')
-        self.R = self.serial.get_parameter('g', 'f')
-        self.C = self.serial.get_parameter('i', 'f')
-        self.exp_dur_factor = self.serial.get_parameter('m', 'f')
-        self.samples_per_tc = self.serial.get_parameter('o', 'f')
-        
-        self.pulse_duration = self.serial.get_parameter('s', 'i')
-        self.pulse_duty_cycle = self.serial.get_parameter('u', 'i')
+        attepts = 3
+        while True :
+            self.Vcc = self.serial.get_parameter('k', 'f')
+            self.R = self.serial.get_parameter('g', 'f')
+            self.C = self.serial.get_parameter('i', 'f')
+            self.exp_dur_factor = self.serial.get_parameter('m', 'f')
+            self.pulse_duration = self.serial.get_parameter('s', 'i')
+            self.pulse_duty_cycle = self.serial.get_parameter('u', 'i')
+            
+            if -1 in [self.Vcc, self.R, self.C, self.exp_dur_factor, 
+                    self.pulse_duration, self.pulse_duty_cycle] :
+                attempts -= 1
+                if attempts <= 0 :
+                    break
+                time_sleep(0.15)
+            else :
+                break
 
 class MainWindow(QMainWindow) :
     def __init__(self) :
@@ -103,16 +116,16 @@ class MainWindow(QMainWindow) :
         self.setWindowTitle(title)
         
         self.uController = arduino()
-        self.uController.connect()
+        #self.uController.connect()
         
         main_layout = QVBoxLayout()
         
-        intro_tab = intro_page(self)
+        intro_tab = intro_page(self, self.uController)
         dis_charge_exp_tab = dis_charge_exp_controls(self)
         freq_exp_tab = freq_exp_controls(self)
         
         main_tabs = QTabWidget()
-        # main_tabs.addTab(intro_tab, "Introduction")
+        main_tabs.addTab(intro_tab, "Introduction")
         main_tabs.addTab(dis_charge_exp_tab, "(Dis)Charge Experiment")
         main_tabs.addTab(freq_exp_tab, "Pulse Experiment")
         
@@ -127,7 +140,7 @@ class intro_page(QWidget) :
     Introduction page widget.
     Displays information about the experiment.
     """
-    def __init__(self, parent) :
+    def __init__(self, parent, uController) :
         """
         Constructs the intro_page class.
 
@@ -145,8 +158,33 @@ class intro_page(QWidget) :
         max_widget_width = 150
         
         self.parent = parent
+        self.uController = uController
         
         self.layout = QGridLayout(self)
+        
+        label_txt = "Select the port your Arduino is connected to: "
+        label = QLabel(label_txt)
+        label.setMaximumWidth(325)
+        self.layout.addWidget(label, 0, 0)
+        
+        self.btn_check_devices = QPushButton("Check for Devices")
+        self.btn_check_devices.setMaximumWidth(max_widget_width)
+        self.btn_check_devices.clicked.connect(self.search_for_devices)
+        self.layout.addWidget(self.btn_check_devices, 0, 1)
+        
+        self.ports_selection = QComboBox(self)
+        self.layout.addWidget(self.ports_selection, 0, 2)
+        
+        self.connect_btn = QPushButton("Connect")
+        self.connect_btn.clicked.connect(self.connect_to_exp)
+        self.connect_btn.setMaximumWidth(max_widget_width)
+        self.layout.addWidget(self.connect_btn, 0, 3)
+        
+        
+        
+        
+        
+        
         
         
         self.instruction_tabs = QTabWidget()
@@ -167,6 +205,59 @@ class intro_page(QWidget) :
         self.layout.addWidget(self.instruction_tabs, 1, 0, 1, 4)
         
         self.setLayout(self.layout)
+        
+        self.search_for_devices()
+    
+    def search_for_devices(self) :
+        """
+        Runs test to find ports that Arduinos are connected to.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.avail_ports = self.uController.serial.get_avail_ports()
+        
+        self.ports_selection.clear()
+        if len(self.avail_ports) > 0 and not self.uController.connected :
+            for port in self.avail_ports :
+                self.ports_selection.addItem( port )
+            self.connect_btn.setEnabled(True)
+        else :
+            self.connect_btn.setEnabled(False)
+    
+    def connect_to_exp(self) :
+        """
+        Establishes connect to Arduino.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.connect_btn.setEnabled(False)
+        port = self.avail_ports[ self.ports_selection.currentIndex() ]
+        self.uController.port = port
+        result = self.uController.connect()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -210,9 +301,6 @@ class dis_charge_exp_controls(QWidget) :
         self.plot_layout.addWidget(self.data_plot_toolbar, 0, 0, 1, 1)
         self.plot_layout.addWidget(self.data_plot, 1, 0, 4, 1)
         self.layout.addLayout(self.plot_layout, 0, 0)
-        
-        #self.data_plot = MplCanvas(self, width=5, height=4, dpi=100)
-        #self.layout.addWidget(self.data_plot, 0, 0, 5, 1)
         
         self.exp_prog_bar = QProgressBar()
         self.layout.addWidget(self.exp_prog_bar, 5, 0, 1, 2)
@@ -304,24 +392,6 @@ class dis_charge_exp_controls(QWidget) :
         self.control_layout.addWidget(QHLine(), row, 0); row += 1
         
         
-        
-        # Set samples per time constant
-        self.lbl_samples_per_tc = QLabel( f"Samples per time constant: (Current: {self.uController.samples_per_tc:.0f})" )
-        self.lbl_samples_per_tc.setMaximumWidth( max_widget_width )
-        self.control_layout.addWidget(self.lbl_samples_per_tc, row, 0); row += 1
-        
-        self.qle_set_samples_per_tc = QLineEdit()
-        self.qle_set_samples_per_tc.setMaximumWidth( max_widget_width )
-        self.control_layout.addWidget(self.qle_set_samples_per_tc, row, 0); row += 1
-        
-        self.btn_set_samples_per_tc = QPushButton("Update Samples/tc")
-        self.btn_set_samples_per_tc.setMaximumWidth( max_widget_width )
-        self.btn_set_samples_per_tc.clicked.connect(self.update_set_samples_per_tc)
-        self.control_layout.addWidget(self.btn_set_samples_per_tc, row, 0); row += 1
-        
-        self.control_layout.addWidget(QHLine(), row, 0); row += 1
-        
-        
         # Run experiment
         label = QLabel("(Dis)Charge Experiment:")
         label.setMaximumWidth( max_widget_width )
@@ -356,7 +426,7 @@ class dis_charge_exp_controls(QWidget) :
         self.layout.addLayout(self.control_layout, 0, 1)
         self.setLayout(self.layout)
         
-        self.update_param_lbls()
+        # self.update_param_lbls()
     
     def discharge_cap(self) :
         self.uController.dis_charge_choice = -1
@@ -487,39 +557,6 @@ class dis_charge_exp_controls(QWidget) :
                 warning_window = warningWindow(self)
                 warning_window.build_window(title=title, msg=warning_msg)
     
-    def update_set_samples_per_tc(self) :
-        new_val = self.qle_set_samples_per_tc.text()
-        
-        try :
-            new_val = int( float(new_val) )
-        except :
-            title = "Samples per Time Constant - Value Error"
-            warning_msg = '\n'.join(["Experiment Duration Factor must be a number"])
-            warning_window = warningWindow(self)
-            warning_window.build_window(title=title, msg=warning_msg)
-            return
-        
-        if new_val < 1 :
-            title = "Samples per Time Constant - Value Error"
-            warning_msg = '\n'.join(["Samples per Time Constant must be an integer greater than 0. "])
-            warning_window = warningWindow(self)
-            warning_window.build_window(title=title, msg=warning_msg)
-            return
-        else :
-            self.disable_controls()
-            successful = self.uController.serial.set_parameter( f'n;{new_val}' )
-            self.enable_controls()
-            if successful :
-                self.update_param_lbls()
-            else :
-                title = "Set Parameter Error"
-                warning_msg = '\n'.join([
-                    "An error was encountered while attempting to update ",
-                    "a parameter. Ensure the Arduino is connected and try again."
-                    ])
-                warning_window = warningWindow(self)
-                warning_window.build_window(title=title, msg=warning_msg)
-    
     def update_param_lbls(self) :
         self.disable_controls()
         self.uController.update_all_parameters()
@@ -534,7 +571,6 @@ class dis_charge_exp_controls(QWidget) :
         self.lbl_resistance.setText( f"Resistance [Ohms]: (Current: {self.uController.R:.0f} Ohms)" )
         self.lbl_capacitance.setText( f"Capacitance [uF]: (Current: {self.uController.C:.0f} uF)" )
         self.lbl_exp_dur_factor.setText( f"Experiment duration factor: (Current: {self.uController.exp_dur_factor:.0f})" )
-        self.lbl_samples_per_tc.setText( f"Samples per time constant: (Current: {self.uController.samples_per_tc:.0f})" )
         self.enable_controls()
     
     def update_dis_charge_choice(self) :
@@ -561,7 +597,6 @@ class dis_charge_exp_controls(QWidget) :
         self.btn_set_resistance.setEnabled(False)
         self.btn_set_capacitance.setEnabled(False)
         self.btn_set_exp_dur_factor.setEnabled(False)
-        self.btn_set_samples_per_tc.setEnabled(False)
         self.qcb_dis_charge_choice.setEnabled(False)
         self.btn_run_exp_dis_charge.setEnabled(False)
         self.btn_save_data.setEnabled(False)
@@ -581,7 +616,6 @@ class dis_charge_exp_controls(QWidget) :
         self.btn_set_resistance.setEnabled(True)
         self.btn_set_capacitance.setEnabled(True)
         self.btn_set_exp_dur_factor.setEnabled(True)
-        self.btn_set_samples_per_tc.setEnabled(True)
         self.qcb_dis_charge_choice.setEnabled(True)
         self.btn_run_exp_dis_charge.setEnabled(True)
         self.btn_save_data.setEnabled(True)
@@ -600,7 +634,7 @@ class dis_charge_exp_controls(QWidget) :
         
         vals = [
             self.uController.R, self.uController.C, 
-            self.uController.exp_dur_factor, self.uController.samples_per_tc, 
+            self.uController.exp_dur_factor, 
             ]
         
         if 0 in vals :
@@ -796,7 +830,7 @@ class freq_exp_controls(QWidget) :
         self.layout.addLayout(self.control_layout, 0, 1, 1, 2)
         self.setLayout(self.layout)
         
-        self.update_param_lbls()
+        # self.update_param_lbls()
     
     def disable_controls(self) :
         self.btn_discharge_cap.setEnabled(False)
@@ -1411,122 +1445,6 @@ if __name__ == '__main__' :
     app.exec_()
     window.uController.serial.disconnect()
     sys.exit()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
