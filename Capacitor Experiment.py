@@ -81,6 +81,8 @@ class arduino() :
                     return False
                 time_sleep( 0.15 )
             self.update_all_parameters()
+        
+        self.serial.send_command('z')
         print( 'Connected Successfully.' )
     
     def update_all_parameters(self) :
@@ -333,7 +335,7 @@ class dis_charge_exp_controls(QWidget) :
         
         self.btn_run_exp_dis_charge = QPushButton("Run Experiment")
         self.btn_run_exp_dis_charge.setMaximumWidth( max_widget_width )
-        self.btn_run_exp_dis_charge.clicked.connect(self.run_experiment)
+        self.btn_run_exp_dis_charge.clicked.connect(lambda: self.run_experiment(True))
         self.control_layout.addWidget(self.btn_run_exp_dis_charge, row, 0); row += 1
         
         self.control_layout.addWidget(QHLine(), row, 0); row += 1
@@ -358,7 +360,7 @@ class dis_charge_exp_controls(QWidget) :
     
     def discharge_cap(self) :
         self.uController.dis_charge_choice = -1
-        self.run_experiment()
+        self.run_experiment(False)
     
     def update_Vcc_choice(self) :
         status = self.qcb_Vcc_choice.currentText()
@@ -590,7 +592,10 @@ class dis_charge_exp_controls(QWidget) :
         if self.uController.dis_charge_choice in [0, 1] :
             self.xy_data = self.result_q.get()
     
-    def run_experiment(self) :
+    def run_experiment(self, update_exp_type=True) :
+        if update_exp_type :
+            self.update_dis_charge_choice()
+        
         self.disable_controls()
         
         vals = [
@@ -1094,10 +1099,6 @@ class dis_charge_exp(QThread) :
         self.canvas.draw()
     
     def cap_prepping(self) :
-        print()
-        print( self.uController.Vcc )
-        print()
-        
         if self.uController.dis_charge_choice == 0 :
             text = "Charging Capacitor"
         elif self.uController.dis_charge_choice in [-1, 1] :
@@ -1122,17 +1123,13 @@ class dis_charge_exp(QThread) :
             self.canvas.draw()
     
     def run(self) :
-        samples = self.uController.exp_dur_factor * self.uController.samples_per_tc
-        print()
-        print( self.uController.exp_dur_factor )
-        print( self.uController.samples_per_tc )
-        print( samples )
-        print()
-        
-        
         itr = 0
         percent_last_update = 0
         x_offset = 0
+        
+        next_frame_t = current_time()
+        exp_t = self.uController.R * 1e-6*self.uController.C * self.uController.exp_dur_factor
+        t_start = current_time()
         
         if self.uController.dis_charge_choice == -1 :
             self.uController.serial.send_command('v')
@@ -1165,12 +1162,15 @@ class dis_charge_exp(QThread) :
             itr += 1
             self.x_data.append( result[0]/(1000*1000)-x_offset )
             self.y_data.append( result[1] )
-            percent_complete = int(100*itr/samples)
+            
+            percent_complete = 100*((current_time()-t_start)/exp_t)
             self.notifyProgress.emit( percent_complete )
-            if self.canvas is not None and percent_complete >= percent_last_update :
-                percent_last_update += 1
+            
+            if self.canvas is not None and current_time() >= next_frame_t :
+                next_frame_t += 0.1
                 self.update_plot()
         
+        self.notifyProgress.emit( 100 )
         self.update_plot(True)
         
         if self.result_q is not None :

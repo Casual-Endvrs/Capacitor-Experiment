@@ -126,14 +126,16 @@ void run_exp( int exp_type) {
   
   tc = R*C;
   
-  const int total_num_data_points = exp_dur*steps_per_tc; // total number of data points to collect for the experiment
+  const int total_num_data_points = 2*exp_dur*steps_per_tc; // total number of data points to collect for the experiment
 
   int itr = 0; // experiment iteration number, advanced upon data aquisition only
   unsigned long next_t = micros(); // next time for measurement
-  int dt = 1000.0*1000.0*float(tc)/float(steps_per_tc); // minimum time between each measurement
+  int dt = 1000.0; // *1000.0*float(tc)/float(steps_per_tc); // minimum time between each measurement
   
   unsigned long t;
   float cap_V;
+
+  unsigned long t_exp_end = micros() + float(R*C*exp_dur)*float(1000)*float(1000);
 
   digitalWrite(8, exp_type);
   while (true) {
@@ -146,7 +148,7 @@ void run_exp( int exp_type) {
       itr += 1;
       next_t += dt;
     }
-    if (itr >= total_num_data_points) { break; }
+    if (t >= t_exp_end) { break; }
   }
   Serial.println( "end" );
 }
@@ -283,6 +285,37 @@ void set_pwr_low() { digitalWrite(8, LOW); }
 
 
 
+
+void run_exp_samples( int exp_type) {
+  //if (exp_type == 1) { verify_cap_charged(false); }
+  //else { verify_cap_discharged(false); }
+  
+  tc = R*C;
+  
+  const int total_num_data_points = 2*exp_dur*steps_per_tc; // total number of data points to collect for the experiment
+
+  int itr = 0; // experiment iteration number, advanced upon data aquisition only
+  unsigned long next_t = micros(); // next time for measurement
+  int dt = 1000.0*1000.0*float(tc)/float(steps_per_tc); // minimum time between each measurement
+  
+  unsigned long t;
+  float cap_V;
+
+  digitalWrite(8, exp_type);
+  while (true) {
+    t = micros();
+    if (t >= next_t) {
+      cap_V = Vcc * analogRead(A0) / 1023;
+      Serial.print( t );
+      Serial.print( ',' );
+      Serial.println( cap_V );
+      itr += 1;
+      next_t += dt;
+    }
+    if (itr >= total_num_data_points) { break; }
+  }
+  Serial.println( "end" );
+}
 
 
 
