@@ -2,6 +2,7 @@ float R = 2200; // resistance of the resistor
 float C = 220e-6; // 0.01; // 220e-6; // capacitance of the capacitor
 float tc = R*C; // time constant of the circuit
 int exp_dur = 7; // duration of the experiment as a multiple of tc
+int steps_per_tc = 50; // number of steps per tc
 
 int pulse_width_ms = 100; // duration of pulse
 int pulse_duty_cycle = 50; // percent duty cycle of the pulse
@@ -18,7 +19,7 @@ String param; // parsed parameter from pc
 int idx; // index of character
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(230400);
   pinMode(8, OUTPUT);
   digitalWrite(8, LOW);
   Serial.setTimeout(1);
@@ -66,6 +67,8 @@ void loop() {
   //else if (cmd=="get_Vcc") { Serial.println(Vcc); } // get get_Vcc
   //else if (cmd=="set_num_tcs") { exp_dur = param.toFloat(); Serial.println(1); } // set experiment duration as a factor * tc
   //else if (cmd=="get_num_tcs") { Serial.println(exp_dur); } // get experiment duration as a factor * tc
+  //else if (cmd=="set_steps_per_tc") { steps_per_tc = param.toInt(); Serial.println(1); } // set steps / tc
+  //else if (cmd=="get_steps_per_tc") { Serial.println(steps_per_tc); } // get steps / tc
   //else if (cmd=="get_cap_v") { Serial.println(Vcc*analogRead(A0)/1023); } // get current capacitor voltage
 
   //else if (cmd=="freq_exp") { freq_exp(); } // frequency experiment
@@ -91,7 +94,8 @@ void loop() {
   else if (cmd=="k") { Serial.println(Vcc); } // get get_Vcc
   else if (cmd=="l") { exp_dur = param.toInt(); Serial.println(1); } // set experiment duration as a factor * tc
   else if (cmd=="m") { Serial.println(exp_dur); } // get experiment duration as a factor * tc
-
+  else if (cmd=="n") { steps_per_tc = param.toInt(); Serial.println(1); } // set steps / tc
+  else if (cmd=="o") { Serial.println(steps_per_tc); } // get steps / tc
   else if (cmd=="p") { Serial.println(Vcc*analogRead(A0)/1023); } // get current capacitor voltage
 
   else if (cmd=="q") { freq_exp(); } // frequency experiment
@@ -276,6 +280,36 @@ void set_pwr_low() { digitalWrite(8, LOW); }
 
 
 
+void run_exp_samples( int exp_type) {
+  //if (exp_type == 1) { verify_cap_charged(false); }
+  //else { verify_cap_discharged(false); }
+  
+  tc = R*C;
+  
+  const int total_num_data_points = 2*exp_dur*steps_per_tc; // total number of data points to collect for the experiment
+
+  int itr = 0; // experiment iteration number, advanced upon data aquisition only
+  unsigned long next_t = micros(); // next time for measurement
+  int dt = 1000.0*1000.0*float(tc)/float(steps_per_tc); // minimum time between each measurement
+  
+  unsigned long t;
+  float cap_V;
+
+  digitalWrite(8, exp_type);
+  while (true) {
+    t = micros();
+    if (t >= next_t) {
+      cap_V = Vcc * analogRead(A0) / 1023;
+      Serial.print( t );
+      Serial.print( ',' );
+      Serial.println( cap_V );
+      itr += 1;
+      next_t += dt;
+    }
+    if (itr >= total_num_data_points) { break; }
+  }
+  Serial.println( "end" );
+}
 
 
 

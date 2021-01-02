@@ -49,7 +49,7 @@ class arduino() :
         self.connected = False
         
         self.port = '/dev/ttyACM0'
-        self.baud = 115200
+        self.baud = 230400
         self.serial = Arduino(self.port, self.baud, timeout=1, eol='/')
         
         """
@@ -90,7 +90,7 @@ class arduino() :
             self.serial.disconnect()
     
     def update_all_parameters(self) :
-        attepts = 3
+        attempts = 3
         while True :
             self.Vcc = self.serial.get_parameter('k', 'f')
             self.R = self.serial.get_parameter('g', 'f')
@@ -116,24 +116,34 @@ class MainWindow(QMainWindow) :
         self.setWindowTitle(title)
         
         self.uController = arduino()
-        #self.uController.connect()
         
         main_layout = QVBoxLayout()
         
-        intro_tab = intro_page(self, self.uController)
-        dis_charge_exp_tab = dis_charge_exp_controls(self)
-        freq_exp_tab = freq_exp_controls(self)
+        self.intro_tab = intro_page(self, self.uController)
+        self.dis_charge_exp_tab = dis_charge_exp_controls(self)
+        self.freq_exp_tab = freq_exp_controls(self)
         
-        main_tabs = QTabWidget()
-        main_tabs.addTab(intro_tab, "Introduction")
-        main_tabs.addTab(dis_charge_exp_tab, "(Dis)Charge Experiment")
-        main_tabs.addTab(freq_exp_tab, "Pulse Experiment")
+        self.main_tabs = QTabWidget()
+        self.main_tabs.addTab(self.intro_tab, "Introduction")
+        self.main_tabs.addTab(self.dis_charge_exp_tab, "(Dis)Charge Experiment")
+        self.main_tabs.addTab(self.freq_exp_tab, "Pulse Experiment")
         
+        self.main_tabs.setTabEnabled(1, False)
+        self.main_tabs.setTabEnabled(2, False)
         
-        main_layout.addWidget(main_tabs)
-        self.setCentralWidget(main_tabs)
+        self.main_tabs.currentChanged.connect(self.tab_changed)
+        
+        main_layout.addWidget(self.main_tabs)
+        self.setCentralWidget(self.main_tabs)
         
         self.show()
+    
+    def tab_changed(self) :
+        tab_idx = self.main_tabs.currentIndex()
+        if tab_idx == 1 :
+            self.dis_charge_exp_tab.update_param_lbls(False)
+        elif tab_idx == 2 :
+            self.freq_exp_tab.update_param_lbls(False)
 
 class intro_page(QWidget) :
     """
@@ -180,6 +190,9 @@ class intro_page(QWidget) :
         self.connect_btn.setMaximumWidth(max_widget_width)
         self.layout.addWidget(self.connect_btn, 0, 3)
         
+        self.lbl_connection_status = QLabel("Connection Status: Disconnected")
+        self.layout.addWidget(self.lbl_connection_status, 1, 0, 1, 4)
+        
         
         
         
@@ -199,10 +212,14 @@ class intro_page(QWidget) :
         self.instruction_tabs.addTab(self.intro_text, "Instruction Text")
         
         self.label = QLabel(self)
+        self.image_file = os.path.join(os.getcwd(), 'Capacitor Schematic.jpg')
+        self.circuit_image = QPixmap(self.image_file)
+        
+        self.label.setPixmap(self.circuit_image)
         
         self.instruction_tabs.addTab(self.label, "Circuit Diagram")
         
-        self.layout.addWidget(self.instruction_tabs, 1, 0, 1, 4)
+        self.layout.addWidget(self.instruction_tabs, 2, 0, 1, 4)
         
         self.setLayout(self.layout)
         
@@ -221,6 +238,7 @@ class intro_page(QWidget) :
         
         self.ports_selection.clear()
         if len(self.avail_ports) > 0 and not self.uController.connected :
+            self.lbl_connection_status.setText("Connection Status: Disconnected")
             for port in self.avail_ports :
                 self.ports_selection.addItem( port )
             self.connect_btn.setEnabled(True)
@@ -239,21 +257,14 @@ class intro_page(QWidget) :
         self.connect_btn.setEnabled(False)
         port = self.avail_ports[ self.ports_selection.currentIndex() ]
         self.uController.port = port
-        result = self.uController.connect()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        success = self.uController.connect()
+        
+        if success :
+            self.lbl_connection_status.setText("Connection Status: Connected")
+            self.parent.main_tabs.setTabEnabled(1, True)
+            self.parent.main_tabs.setTabEnabled(2, True)
+        else :
+            self.lbl_connection_status.setText("Connection Status: Connection Attempt Failed")
 
 
 
@@ -405,7 +416,7 @@ class dis_charge_exp_controls(QWidget) :
         
         self.btn_run_exp_dis_charge = QPushButton("Run Experiment")
         self.btn_run_exp_dis_charge.setMaximumWidth( max_widget_width )
-        self.btn_run_exp_dis_charge.clicked.connect(lambda: self.run_experiment(True))
+        self.btn_run_exp_dis_charge.clicked.connect(lambda: self.run_dis_charge_exp(True))
         self.control_layout.addWidget(self.btn_run_exp_dis_charge, row, 0); row += 1
         
         self.control_layout.addWidget(QHLine(), row, 0); row += 1
@@ -430,7 +441,7 @@ class dis_charge_exp_controls(QWidget) :
     
     def discharge_cap(self) :
         self.uController.dis_charge_choice = -1
-        self.run_experiment(False)
+        self.run_dis_charge_exp(False)
     
     def update_Vcc_choice(self) :
         status = self.qcb_Vcc_choice.currentText()
@@ -557,9 +568,10 @@ class dis_charge_exp_controls(QWidget) :
                 warning_window = warningWindow(self)
                 warning_window.build_window(title=title, msg=warning_msg)
     
-    def update_param_lbls(self) :
+    def update_param_lbls(self, update_parameters=True) :
         self.disable_controls()
-        self.uController.update_all_parameters()
+        if update_parameters :
+            self.uController.update_all_parameters()
         
         Vcc = self.uController.Vcc
         if Vcc == 3.3 :
@@ -600,7 +612,8 @@ class dis_charge_exp_controls(QWidget) :
         self.qcb_dis_charge_choice.setEnabled(False)
         self.btn_run_exp_dis_charge.setEnabled(False)
         self.btn_save_data.setEnabled(False)
-        #self.parent.main_tabs.setTabEnabled(0, False)
+        self.parent.main_tabs.setTabEnabled(0, False)
+        self.parent.main_tabs.setTabEnabled(2, False)
     
     def enable_controls(self) :
         """
@@ -619,14 +632,15 @@ class dis_charge_exp_controls(QWidget) :
         self.qcb_dis_charge_choice.setEnabled(True)
         self.btn_run_exp_dis_charge.setEnabled(True)
         self.btn_save_data.setEnabled(True)
-        #self.parent.main_tabs.setTabEnabled(0, True)
+        self.parent.main_tabs.setTabEnabled(0, True)
+        self.parent.main_tabs.setTabEnabled(2, True)
     
     def exp_complete(self) :
         self.enable_controls()
         if self.uController.dis_charge_choice in [0, 1] :
             self.xy_data = self.result_q.get()
     
-    def run_experiment(self, update_exp_type=True) :
+    def run_dis_charge_exp(self, update_exp_type=True) :
         if update_exp_type :
             self.update_dis_charge_choice()
         
@@ -685,6 +699,9 @@ class freq_exp_controls(QWidget) :
         max_widget_width = 300
         
         self.layout = QGridLayout(self) # plot and progress bar
+        
+        self.exp_prog_bar = QProgressBar()
+        self.layout.addWidget(self.exp_prog_bar, 5, 0, 1, 3)
         
         self.plot_layout = QGridLayout()
         self.data_plot = MplCanvas(self, width=5, height=4, dpi=100)
@@ -803,7 +820,7 @@ class freq_exp_controls(QWidget) :
         
         self.btn_run_pulse_exp = QPushButton("Run Experiment")
         self.btn_run_pulse_exp.setMaximumWidth( max_widget_width )
-        self.btn_run_pulse_exp.clicked.connect(self.run_experiment)
+        self.btn_run_pulse_exp.clicked.connect(self.run_pulse_exp)
         self.control_layout.addWidget(self.btn_run_pulse_exp, row, 0); row += 1
         
         self.btn_stop_pulse_exp = QPushButton("STOP Experiment")
@@ -832,6 +849,9 @@ class freq_exp_controls(QWidget) :
         
         # self.update_param_lbls()
     
+    def exp_prog_update(self, i) :
+        self.exp_prog_bar.setValue( i )
+    
     def disable_controls(self) :
         self.btn_discharge_cap.setEnabled(False)
         self.qcb_Vcc_choice.setEnabled(False)
@@ -842,7 +862,8 @@ class freq_exp_controls(QWidget) :
         self.btn_run_pulse_exp.setEnabled(False)
         self.btn_stop_pulse_exp.setEnabled(False)
         self.btn_save_data.setEnabled(False)
-        #self.parent.main_tabs.setTabEnabled(0, False)
+        self.parent.main_tabs.setTabEnabled(0, False)
+        self.parent.main_tabs.setTabEnabled(1, False)
     
     def enable_controls(self) :
         self.btn_discharge_cap.setEnabled(True)
@@ -854,11 +875,12 @@ class freq_exp_controls(QWidget) :
         self.btn_run_pulse_exp.setEnabled(True)
         self.btn_stop_pulse_exp.setEnabled(False)
         self.btn_save_data.setEnabled(True)
-        #self.parent.main_tabs.setTabEnabled(0, True)
+        self.parent.main_tabs.setTabEnabled(0, True)
+        self.parent.main_tabs.setTabEnabled(1, True)
     
     def discharge_cap(self) :
         self.uController.dis_charge_choice = -1
-        self.run_experiment()
+        self.run_dis_charge_exp()
     
     def update_Vcc_choice(self) :
         status = self.qcb_Vcc_choice.currentText()
@@ -1016,9 +1038,10 @@ class freq_exp_controls(QWidget) :
                 warning_window = warningWindow(self)
                 warning_window.build_window(title=title, msg=warning_msg)
     
-    def update_param_lbls(self) :
+    def update_param_lbls(self, update_parameters=True) :
         self.disable_controls()
-        self.uController.update_all_parameters()
+        if update_parameters :
+            self.uController.update_all_parameters()
         
         Vcc = self.uController.Vcc
         if Vcc == 3.3 :
@@ -1034,11 +1057,11 @@ class freq_exp_controls(QWidget) :
         self.enable_controls()
     
     def exp_complete(self) :
-        self.uController.serial.send_command( 'z' )
         self.enable_controls()
-        self.xy_data = self.result_q.get()
+        if self.uController.dis_charge_choice in [0, 1] :
+            self.xy_data = self.result_q.get()
     
-    def run_experiment(self) :
+    def run_pulse_exp(self) :
         self.disable_controls()
         self.btn_stop_pulse_exp.setEnabled(True)
         
@@ -1074,8 +1097,23 @@ class freq_exp_controls(QWidget) :
         
         with open(os.path.join(self.folder, self.fil), 'w') as fil :
             np.savetxt(fil, self.xy_data, fmt='%.7e', delimiter=',', newline='\n', header=header, footer='', comments='# ', encoding=None)
-
+    
+    def run_dis_charge_exp(self) :
+        self.disable_controls()
         
+        vals = [
+            self.uController.R, self.uController.C, 
+            self.uController.exp_dur_factor, 
+            ]
+        
+        if 0 in vals :
+            self.update_param_lbls()
+        
+        self.running_exp = dis_charge_exp(uController=self.uController, result_q=self.result_q, canvas=self.data_plot)
+        self.running_exp.notifyProgress.connect(self.exp_prog_update)
+        self.running_exp.start()
+        self.running_exp.finished.connect(self.exp_complete)
+
 
 
 
@@ -1206,6 +1244,7 @@ class dis_charge_exp(QThread) :
         
         self.notifyProgress.emit( 100 )
         self.update_plot(True)
+        
         
         if self.result_q is not None :
             self.result_q.put( np.transpose([self.x_data, self.y_data]) )
