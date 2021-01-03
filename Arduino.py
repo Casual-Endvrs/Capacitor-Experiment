@@ -86,7 +86,7 @@ class Arduino() :
             return 'Success'
         except :
             if port not in self.get_avail_ports() :
-                return 'Port does not exist'
+                return 'Nothing connected to point'
             return 'Connection Failure'
     
     def test_connection(self) :
@@ -252,70 +252,6 @@ class Arduino() :
             print( f'data : {data}' )
             print( f'd_type : {d_type}' )
             print()
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    def get_responses_delayed(self, num_responses=None, element_separator=',', 
-                        response_types=None, transpose=True, eol='\r\n',
-                        time_between_checks=0.01,
-                        max_tries=25, time_between_tries=0.1) :
-        """
-        element_separator
-        response_types
-        transpose
-        """
-        if self.arduino is None :
-            return False
-        
-        elements = 0
-        tries = 0
-        responses = []
-        while True :
-            if time_between_checks is not None \
-                and time_between_checks > 0 :
-                time_sleep( time_between_checks )
-            if self.arduino.in_waiting :
-                result = self.arduino.readline()
-                # this requires a timeout break
-                if result in [b'', b'\n', b'end\r\n'] :
-                    print( f'found end marker: {result}' )
-                    break
-                result = [result.decode('utf-8')]
-                responses.append( result )
-                elements += 1
-                if num_responses is not None \
-                        and elements >= num_responses :
-                    print( 'found max number of responses' )
-                    break
-            else :
-                if tries >= max_tries :
-                    break
-                time_sleep(time_between_tries)
-                tries += 1
-        
-        if element_separator is not None :
-            responses = [ row[0].split(element_separator) 
-                            for row in responses ]
-        
-        if response_types is not None :
-            if isinstance(response_types, (list, tuple, np.ndarray)) :
-                num_response_types = len(response_types)
-                responses = [ [ self.convert_type(row[i], response_types[i])
-                                for i in range(num_response_types) ]
-                             for row in responses ]
-            elif isinstance(response_types, str) :
-                responses = [ [ self.convert_type(ele, response_types)
-                                for ele in row ]
-                             for row in responses ]
-        
-        if transpose :
-            responses = list(map(list, itertools_zip_longest(*responses, fillvalue=None)))
-        
-        return responses
+
+
+

@@ -141,9 +141,9 @@ class MainWindow(QMainWindow) :
     def tab_changed(self) :
         tab_idx = self.main_tabs.currentIndex()
         if tab_idx == 1 :
-            self.dis_charge_exp_tab.update_param_lbls(False)
+            self.dis_charge_exp_tab.update_param_lbls()
         elif tab_idx == 2 :
-            self.freq_exp_tab.update_param_lbls(False)
+            self.freq_exp_tab.update_param_lbls()
 
 class intro_page(QWidget) :
     """
@@ -167,6 +167,8 @@ class intro_page(QWidget) :
         super(QWidget, self).__init__(parent)
         max_widget_width = 150
         
+        self.result_q = Queue()
+        
         self.parent = parent
         self.uController = uController
         
@@ -186,7 +188,8 @@ class intro_page(QWidget) :
         self.layout.addWidget(self.ports_selection, 0, 2)
         
         self.connect_btn = QPushButton("Connect")
-        self.connect_btn.clicked.connect(self.connect_to_exp)
+        self.connect_btn.clicked.connect(self.connect_init)
+        #self.connect_btn.clicked.connect(self.connect_to_exp)
         self.connect_btn.setMaximumWidth(max_widget_width)
         self.layout.addWidget(self.connect_btn, 0, 3)
         
@@ -203,7 +206,106 @@ class intro_page(QWidget) :
         self.instruction_tabs = QTabWidget()
         
         self.intro_instructions = "\n".join([
-            "Insert the introduction text here."
+            "Important Note:",
+            "Arduino micro-controllers are only designed to provide a peak current of 50 ma. "
+            "This experiment uses an RC circuit; a circuit composed of a resistor (R) and a capacitor (C). "
+            "To protect the micro-controller, always use a resistor that has a resistance of 250 Ohms or greater. "
+            "This software is setup to require a resistance of 250 Ohms or more. This is done as a reminder to "
+            "the user. Do not use a resistor values less than this.",
+            "",
+            "There is a known issue where the program will present obviously erroneous data or may crash. This is "
+            "caused by communication errors between the Arduino and pc. If this happens, try resetting the Arduino "
+            "(using the Arduino's reset button or unplugging and plugging it back in again) and restarting the software. "
+            "Generally, either the software has an issue with the first experiment or it runs flawlessly.",
+            "",
+            "-----------------------",
+            "Resistor/Capacitor (RC) Circuits - Time Constants",
+            "-----------------------",
+            "The characteristic parameter of an RC circuit is called the \"time constant,\" TC. "
+            "The TC determines how the circuit responds to input voltages, either AC or DC. "
+            "These experiments perform best when the RC circuit has a time constant between 0.5 and 1 second.",
+            "An example calculation for a time constant is as follows:",
+            "     If the resistor has a value of 2200 Ohms, and the capacitor has a value of 220 micro-Farad, then",
+            "            tc = RC",
+            "                = 2200 Ohms x 220E-6 Farad ",
+            "                = 0.484 seconds ",
+            "",
+            "-----------------------",
+            "Circuit Diagram:",
+            "-----------------------",
+            "Circuit pin connections: (Note: A circuit diagram is provided in the \"Circuit Diagram\" tab.)",
+            "     Arduino D8 --> Resistor --> (Measure Point) --> Capacitor --> Arduino ground (GND)",
+            "     Arduino A0 --> Measure Point",
+            "Note: For electrolytic capacitors it is important to connect the negative terminal to ground (GND), the terminal "
+            "next to the silver line.",
+            "",
+            "-----------------------",
+            "Experiment Parameters:",
+            "-----------------------",
+            "There are several parameters that can be set. It is important that the values for resistor "
+            "and the capacitor are provided. These are used by the Arduino to determine how long experiments "
+            "should be run and by this software for model fits.",
+            "Parameters (Common to all experiments):",
+            "     Vcc [Volts] --> The voltage output of the Arduino. Note: this does not change "
+            "the output voltage of the Arduino, it only sets a value used by the software.",
+            "     Resistance [Ohms] --> The resistance of the resistor used in the experiment. "
+            "This must have a value of 250 Ohms or greater. Used to determine the circuits time constant.",
+            "     Capacitance [micro-Farads] --> The capacitance of the capacitor used in the experiment. "
+            "Used to determine the circuits time constant.",
+            "",
+            "Parameters ( (Dis)Charge Experiment ):",
+            "     Experiment duration factor [unitless] --> This number is multiplied by the circuits time "
+            "constant to determine how long the charge/discharge experiment should run. It is recommended to "
+            "use a number from 3 to 10.",
+            "",
+            "Parameters (Pulse Experiment):",
+            "     Pulse Duration [milli-seconds] --> Full duration of a pulse. This is the amount of time taken "
+            "for the signal pulse to switch HIGH, stay HIGH, switch LOW, stay LOW. This HIGH/LOW process is then "
+            "repeated. It is recommended to use a value between 10 and 500. Values less than 10 will not be accepted.",
+            "     Pulse Duty-Cycle [%] --> This is the percent of the pulse duration which will be spent in the "
+            "HIGH state. 100 is always HIGH, 0 is always LOW, and 50 is HIGH half the time and LOW the other half. "
+            "Any integer value between 0 and 100 inclusive is accepted.",
+            "",
+            "-----------------------",
+            "(Dis)Charge Experiment:",
+            "-----------------------",
+            "This experiment measures the time constant of the RC circuit by recording the voltage "
+            "across the capacitor as a function of time and then fits these results with the equations "
+            "that describes a theoretical capacitor charging or discharging.",
+            "There are two different equations, one for each case.",
+            "     Charging --> capacitor voltage = Vcc * (1- exp(-t/TC) )",
+            "     Discharging --> capacitor voltage = Vcc * exp(-t/TC)",
+            "     where: Vcc --> (charging) supply voltage to charge the capacitor",
+            "                             (discharging) initial voltage across the capacitor",
+            "                             exp(x) --> Euler's number to the power of x, e^x",
+            "                             TC --> RC circuit's time constant, equal to Resistance x Capacitance",
+            "Proceedure (Charging):",
+            "    1) Pin D8 is set LOW, the capacitor is discharged to 0 volts",
+            "    2) Pin D8 is set HIGH (3.3 or 5 volts), the capacitor starts charging and live data is sent to the pc",
+            "    3) The experiment will automatically stop after (Experiment duration factor) * TC seconds",
+            "    4) The analysis is automatically performed and the results (both plot figure and "
+            "the data as a csv file) can be saved.",
+            "Proceedure (Discharging):",
+            "    1) Pin D8 is set HIGH, the capacitor is charged to Vcc (3.3 or 5) volts",
+            "    2) Pin D8 is set LOW (0 volts or GND), the capacitor starts discharging and live data is sent to the pc",
+            "    3) The experiment will automatically stop after (Experiment duration factor) * TC seconds",
+            "    4) The analysis is automatically performed and the results (both plot figure and "
+            "the data as a csv file) can be saved.",
+            "",
+            "-----------------------",
+            "Pulse Experiment",
+            "-----------------------",
+            "This experiment measures the voltage across a capacitor as the supply voltage is quickly turned on and off. "
+            "The on/off process is done using a pulse signal which is either HIGH (3.3 or 5 volts) or LOW (0 volts, GND). The pulse "
+            "duration and duty cycle can be changed to see how RC circuits respond. As these values are changed the user should "
+            "look at the change to the average voltage as well as the voltage variation, min/max voltages, after the system has "
+            "reached a consistent behaviour.",
+            "Proceedure:",
+            "     1) Set pulse duration and duty cycle",
+            "     2) Run experiment - This experiment will not stop on its own. To stop the experiment click \"STOP Experiment\". "
+            "If it doesn't stop within a second click \"STOP Experiment\" again.",
+            "     3) The user can now save the plot figure and data as a csv file is they wish.",
+            "     4) Pulse duration and duty cycle can be changed and the experiment repeated to observe changes."
             ])
         self.intro_text = QPlainTextEdit(readOnly=True, plainText = self.intro_instructions)
         self.intro_text.backgroundVisible = False
@@ -245,7 +347,7 @@ class intro_page(QWidget) :
         else :
             self.connect_btn.setEnabled(False)
     
-    def connect_to_exp(self) :
+    def connect_init(self) :
         """
         Establishes connect to Arduino.
 
@@ -254,19 +356,28 @@ class intro_page(QWidget) :
         None.
 
         """
+        self.lbl_connection_status.setText("Connection Status: Attempting to Connect")
+        self.btn_check_devices.setEnabled(False)
+        self.ports_selection.setEnabled(False)
         self.connect_btn.setEnabled(False)
         port = self.avail_ports[ self.ports_selection.currentIndex() ]
         self.uController.port = port
-        success = self.uController.connect()
         
-        if success :
+        self.thread = connect_thread(uController=self.uController, result_q=self.result_q)
+        self.thread.finished.connect(self.connect_complete)
+        self.thread.start()
+    
+    def connect_complete(self) :
+        success = self.result_q.get()
+        
+        if success == 'Success' :
             self.lbl_connection_status.setText("Connection Status: Connected")
             self.parent.main_tabs.setTabEnabled(1, True)
             self.parent.main_tabs.setTabEnabled(2, True)
         else :
             self.lbl_connection_status.setText("Connection Status: Connection Attempt Failed")
-
-
+            self.btn_check_devices.setEnabled(True)
+            self.ports_selection.setEnabled(True)
 
 
 
@@ -311,10 +422,10 @@ class dis_charge_exp_controls(QWidget) :
         self.data_plot_toolbar = NavigationToolbar(self.data_plot, self)
         self.plot_layout.addWidget(self.data_plot_toolbar, 0, 0, 1, 1)
         self.plot_layout.addWidget(self.data_plot, 1, 0, 4, 1)
-        self.layout.addLayout(self.plot_layout, 0, 0)
+        self.layout.addLayout(self.plot_layout, 0, 0, 2, 1)
         
         self.exp_prog_bar = QProgressBar()
-        self.layout.addWidget(self.exp_prog_bar, 5, 0, 1, 2)
+        self.layout.addWidget(self.exp_prog_bar, 2, 0, 1, 2)
         
         
         self.control_layout = QGridLayout() # controls to run experiment
@@ -434,10 +545,8 @@ class dis_charge_exp_controls(QWidget) :
         
         
         
-        self.layout.addLayout(self.control_layout, 0, 1)
+        self.layout.addLayout(self.control_layout, 0, 1, 1, 1)
         self.setLayout(self.layout)
-        
-        # self.update_param_lbls()
     
     def discharge_cap(self) :
         self.uController.dis_charge_choice = -1
@@ -568,11 +677,15 @@ class dis_charge_exp_controls(QWidget) :
                 warning_window = warningWindow(self)
                 warning_window.build_window(title=title, msg=warning_msg)
     
-    def update_param_lbls(self, update_parameters=True) :
+    def update_param_lbls(self) :
         self.disable_controls()
-        if update_parameters :
-            self.uController.update_all_parameters()
+        # self.uController.update_all_parameters()
         
+        self.thread = update_uController_params(uController=self.uController)
+        self.thread.finished.connect(self.update_param_lbls_complete)
+        self.thread.start()
+    
+    def update_param_lbls_complete(self) :
         Vcc = self.uController.Vcc
         if Vcc == 3.3 :
             self.qcb_Vcc_choice.setCurrentIndex(0)
@@ -656,8 +769,8 @@ class dis_charge_exp_controls(QWidget) :
         
         self.running_exp = dis_charge_exp(uController=self.uController, result_q=self.result_q, canvas=self.data_plot)
         self.running_exp.notifyProgress.connect(self.exp_prog_update)
-        self.running_exp.start()
         self.running_exp.finished.connect(self.exp_complete)
+        self.running_exp.start()
     
     def save_data(self) :
         fil = QFileDialog.getSaveFileName(self, "Select Save File", self.folder, "CSV files (*.csv)")[0]
@@ -708,10 +821,10 @@ class freq_exp_controls(QWidget) :
         self.data_plot_toolbar = NavigationToolbar(self.data_plot, self)
         self.plot_layout.addWidget(self.data_plot_toolbar, 0, 0, 1, 1)
         self.plot_layout.addWidget(self.data_plot, 1, 0, 4, 1)
-        self.layout.addLayout(self.plot_layout, 0, 0)
+        self.layout.addLayout(self.plot_layout, 0, 0, 2, 1)
         
-        # self.exp_prog_bar = QProgressBar()
-        # self.layout.addWidget(self.exp_prog_bar, 5, 0, 1, 2)
+        #self.exp_prog_bar = QProgressBar()
+        #self.layout.addWidget(self.exp_prog_bar, 2, 0, 1, 2)
         
         
         self.control_layout = QGridLayout() # controls to run experiment
@@ -846,8 +959,6 @@ class freq_exp_controls(QWidget) :
         
         self.layout.addLayout(self.control_layout, 0, 1, 1, 2)
         self.setLayout(self.layout)
-        
-        # self.update_param_lbls()
     
     def exp_prog_update(self, i) :
         self.exp_prog_bar.setValue( i )
@@ -1038,11 +1149,15 @@ class freq_exp_controls(QWidget) :
                 warning_window = warningWindow(self)
                 warning_window.build_window(title=title, msg=warning_msg)
     
-    def update_param_lbls(self, update_parameters=True) :
+    def update_param_lbls(self) :
         self.disable_controls()
-        if update_parameters :
-            self.uController.update_all_parameters()
+        # self.uController.update_all_parameters()
         
+        self.thread = update_uController_params(uController=self.uController)
+        self.thread.finished.connect(self.update_param_lbls_complete)
+        self.thread.start()
+    
+    def update_param_lbls_complete(self) :
         Vcc = self.uController.Vcc
         if Vcc == 3.3 :
             self.qcb_Vcc_choice.setCurrentIndex(0)
@@ -1066,8 +1181,8 @@ class freq_exp_controls(QWidget) :
         self.btn_stop_pulse_exp.setEnabled(True)
         
         self.running_exp = pulse_exp(uController=self.uController, result_q=self.result_q, canvas=self.data_plot)
-        self.running_exp.start()
         self.running_exp.finished.connect(self.exp_complete)
+        self.running_exp.start()
     
     def stop_experiment(self) :
         self.uController.serial.send_command('stop')
@@ -1111,8 +1226,8 @@ class freq_exp_controls(QWidget) :
         
         self.running_exp = dis_charge_exp(uController=self.uController, result_q=self.result_q, canvas=self.data_plot)
         self.running_exp.notifyProgress.connect(self.exp_prog_update)
-        self.running_exp.start()
         self.running_exp.finished.connect(self.exp_complete)
+        self.running_exp.start()
 
 
 
@@ -1124,8 +1239,26 @@ class freq_exp_controls(QWidget) :
 
 
 
+class update_uController_params(QThread) :
+    def __init__(self, uController) :
+        QThread.__init__(self)
+        self.uController = uController
+    
+    def run(self) :
+        self.uController.update_all_parameters()
 
 
+class connect_thread(QThread) :
+    def __init__(self, uController, result_q) :
+        QThread.__init__(self)
+        self.uController = uController
+        self.result_q = result_q
+    
+    def run(self) :
+        success = self.uController.serial.connect()
+        if success == 'Success' :
+            self.uController.update_all_parameters()
+        self.result_q.put( success )
 
 class dis_charge_exp(QThread) :
     notifyProgress = pyqtSignal(int)
@@ -1162,7 +1295,7 @@ class dis_charge_exp(QThread) :
             txt_dy = 0.05 * self.uController.Vcc
             self.canvas.axes.text(txt_x, txt_y, "Fit Results:", fontsize=15); txt_y -= txt_dy
             # self.canvas.axes.text(txt_x, txt_y, f"Vcc: {fit_result.params['Vcc'].value:.3f} V", fontsize=15); txt_y -= txt_dy
-            self.canvas.axes.text(txt_x, txt_y, f"tc: {fit_result.params['tc'].value:.3f} s", fontsize=15); txt_y -= txt_dy
+            self.canvas.axes.text(txt_x, txt_y, f"TC: {fit_result.params['tc'].value:.3f} s", fontsize=15); txt_y -= txt_dy
         
         self.canvas.axes.set_xlabel( 'Time [s]' )
         self.canvas.axes.set_ylabel( 'Voltage Across Capacitor [V]' )
