@@ -23,6 +23,7 @@ void setup() {
   pinMode(8, OUTPUT);
   digitalWrite(8, LOW);
   Serial.setTimeout(1);
+  delay(250);
 }
 
 void loop() {
@@ -125,7 +126,7 @@ void run_exp( int exp_type) {
   //else { verify_cap_discharged(false); }
   
   unsigned long next_t = micros(); // next time for measurement
-  int dt = 1000.0; // minimum time between each measurement
+  int dt = 1 * 1000.0; // minimum time between each measurement
   
   unsigned long t;
   float cap_V;
@@ -247,7 +248,7 @@ void verify_cap_charged(bool serial_return) {
   
   while(true) {
     if(millis()>t) {
-      t += 2;
+      t += 2000;
       cap_v = analogRead(A0);
       Serial.println( Vcc*cap_v/1023 );
       if (cap_v > 1018) { break; }
