@@ -219,7 +219,7 @@ void dis_charge_cap(int exp_type) {
 }
 
 void verify_cap_discharged(bool serial_return) {
-  if(serial_return) { Serial.println("0"); } // signal process started
+  //if(serial_return) { Serial.println("0"); } // signal process started
   digitalWrite(8, LOW);
   int cap_v;
 
@@ -233,12 +233,12 @@ void verify_cap_discharged(bool serial_return) {
       if (cap_v < 3) { Serial.println("end"); break; }
     }
   }
-  
-  if(serial_return) { Serial.println("1"); } // signal process complete
+  Serial.println("end");
+  //if(serial_return) { Serial.println("1"); } // signal process complete
 }
 
 void verify_cap_charged(bool serial_return) {
-  if(serial_return) { Serial.println("0"); } // signal process started
+  //if(serial_return) { Serial.println("0"); } // signal process started
   digitalWrite(8, HIGH);
   int cap_v;
 
@@ -252,8 +252,8 @@ void verify_cap_charged(bool serial_return) {
       if (cap_v > 1018) { Serial.println("end"); break; }
     }
   }
-  
-  if(serial_return) { Serial.println("1"); } // signal process complete
+  Serial.println("end");
+  //if(serial_return) { Serial.println("1"); } // signal process complete
 }
 
 void set_pwr_low() { digitalWrite(8, LOW); }

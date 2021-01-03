@@ -413,6 +413,8 @@ class dis_charge_exp_controls(QWidget) :
         self.xy_data = []
         self.result_q = Queue()
         
+        self.exp_to_run = []
+        
         max_widget_width = 300
         
         self.layout = QGridLayout(self) # plot and progress bar
@@ -527,7 +529,7 @@ class dis_charge_exp_controls(QWidget) :
         
         self.btn_run_exp_dis_charge = QPushButton("Run Experiment")
         self.btn_run_exp_dis_charge.setMaximumWidth( max_widget_width )
-        self.btn_run_exp_dis_charge.clicked.connect(lambda: self.run_dis_charge_exp(True))
+        self.btn_run_exp_dis_charge.clicked.connect(self.initialize_exp)
         self.control_layout.addWidget(self.btn_run_exp_dis_charge, row, 0); row += 1
         
         self.control_layout.addWidget(QHLine(), row, 0); row += 1
@@ -549,8 +551,8 @@ class dis_charge_exp_controls(QWidget) :
         self.setLayout(self.layout)
     
     def discharge_cap(self) :
-        self.uController.dis_charge_choice = -1
-        self.run_dis_charge_exp(False)
+        self.exp_to_run = [-1]
+        self.run_dis_charge_exp()
     
     def update_Vcc_choice(self) :
         status = self.qcb_Vcc_choice.currentText()
@@ -752,10 +754,16 @@ class dis_charge_exp_controls(QWidget) :
         self.enable_controls()
         if self.uController.dis_charge_choice in [0, 1] :
             self.xy_data = self.result_q.get()
+        
+        if len(self.exp_to_run) > 0 :
+            self.run_dis_charge_exp()
     
-    def run_dis_charge_exp(self, update_exp_type=True) :
-        if update_exp_type :
-            self.update_dis_charge_choice()
+    def run_dis_charge_exp(self) :
+        if len(self.exp_to_run) == 0 :
+            return
+        
+        self.uController.dis_charge_choice = self.exp_to_run[0]
+        del self.exp_to_run[0]
         
         self.disable_controls()
         
@@ -771,6 +779,17 @@ class dis_charge_exp_controls(QWidget) :
         self.running_exp.notifyProgress.connect(self.exp_prog_update)
         self.running_exp.finished.connect(self.exp_complete)
         self.running_exp.start()
+    
+    def initialize_exp(self) :
+        self.update_dis_charge_choice()
+        if self.uController.dis_charge_choice == 0 :
+            self.exp_to_run = [2, 0]
+        elif self.uController.dis_charge_choice == 1 :
+            self.exp_to_run = [-1, 1]
+        else :
+            return
+        
+        self.run_dis_charge_exp()
     
     def save_data(self) :
         fil = QFileDialog.getSaveFileName(self, "Select Save File", self.folder, "CSV files (*.csv)")[0]
@@ -1304,9 +1323,9 @@ class dis_charge_exp(QThread) :
         self.canvas.draw()
     
     def cap_prepping(self) :
-        if self.uController.dis_charge_choice == 0 :
+        if self.uController.dis_charge_choice in [2] :
             text = "Charging Capacitor"
-        elif self.uController.dis_charge_choice in [-1, 1] :
+        elif self.uController.dis_charge_choice in [-1] :
             text = "Discharging Capacitor"
         else :
             text = "invalid experiment choice"
@@ -1339,14 +1358,16 @@ class dis_charge_exp(QThread) :
         if self.uController.dis_charge_choice == -1 :
             self.uController.serial.send_command('v')
             self.cap_prepping()
+            result = self.uController.serial.get_responses(num_responses=1, end_message=True)
             return
-        elif self.uController.dis_charge_choice == 0 :
+        elif self.uController.dis_charge_choice == 2 :
             self.uController.serial.send_command('w')
             self.cap_prepping()
+            result = self.uController.serial.get_responses(num_responses=1, end_message=True)
+            return
+        elif self.uController.dis_charge_choice == 0 :
             self.uController.serial.send_command('b')
         elif self.uController.dis_charge_choice == 1 :
-            self.uController.serial.send_command('v')
-            self.cap_prepping()
             self.uController.serial.send_command('a')
         else :
             return False
@@ -1371,7 +1392,6 @@ class dis_charge_exp(QThread) :
         
         self.notifyProgress.emit( 100 )
         self.update_plot(True)
-        
         
         if self.result_q is not None :
             self.result_q.put( np.transpose([self.x_data, self.y_data]) )
