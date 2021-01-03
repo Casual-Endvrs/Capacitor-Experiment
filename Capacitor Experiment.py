@@ -1275,8 +1275,7 @@ class dis_charge_exp(QThread) :
         self.canvas.axes.cla()
         self.canvas.axes.plot(self.x_data, self.y_data, '.')
         
-        if fit and self.uController.dis_charge_choice in [0, 1] \
-            and len(self.x_data)>5 :
+        if fit and self.uController.dis_charge_choice in [0, 1] :
             Vcc = self.uController.Vcc
             tc = self.uController.R * self.uController.C *1e-6
             params = lmfit.Parameters()
@@ -1344,23 +1343,16 @@ class dis_charge_exp(QThread) :
         elif self.uController.dis_charge_choice == 0 :
             self.uController.serial.send_command('w')
             self.cap_prepping()
-            time_sleep(1)
             self.uController.serial.send_command('b')
         elif self.uController.dis_charge_choice == 1 :
             self.uController.serial.send_command('v')
             self.cap_prepping()
-            time_sleep(1)
             self.uController.serial.send_command('a')
         else :
             return False
         
-        self.x_data = []
-        self.y_data = []
-        
         while True :
             result = self.uController.serial.get_responses(num_responses=1, transpose=False, response_types="f", end_message=True)
-            
-            print( result )
             
             if result[0] == 'end' :
                 break

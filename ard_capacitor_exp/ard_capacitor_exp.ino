@@ -23,7 +23,6 @@ void setup() {
   pinMode(8, OUTPUT);
   digitalWrite(8, LOW);
   Serial.setTimeout(1);
-  delay(250);
 }
 
 void loop() {
@@ -126,7 +125,7 @@ void run_exp( int exp_type) {
   //else { verify_cap_discharged(false); }
   
   unsigned long next_t = micros(); // next time for measurement
-  int dt = 1 * 1000.0; // minimum time between each measurement
+  int dt = 1000.0; // minimum time between each measurement
   
   unsigned long t;
   float cap_V;
@@ -217,11 +216,10 @@ void dis_charge_cap(int exp_type) {
       t_check_serial += dt_serial_check;
     }
   }
-  Serial.println("end");
 }
 
 void verify_cap_discharged(bool serial_return) {
-  //if(serial_return) { Serial.println("0"); } // signal process started
+  if(serial_return) { Serial.println("0"); } // signal process started
   digitalWrite(8, LOW);
   int cap_v;
 
@@ -229,18 +227,18 @@ void verify_cap_discharged(bool serial_return) {
   
   while(true) {
     if(millis()>t) {
-      t += 2;
+      t += 5;
       cap_v = analogRead(A0);
       Serial.println( Vcc*cap_v/1023 );
-      if (cap_v < 3) { break; }
+      if (cap_v < 3) { Serial.println("end"); break; }
     }
   }
-  Serial.println("end");
-  //if(serial_return) { Serial.println("1"); } // signal process complete
+  
+  if(serial_return) { Serial.println("1"); } // signal process complete
 }
 
 void verify_cap_charged(bool serial_return) {
-  //if(serial_return) { Serial.println("0"); } // signal process started
+  if(serial_return) { Serial.println("0"); } // signal process started
   digitalWrite(8, HIGH);
   int cap_v;
 
@@ -248,14 +246,14 @@ void verify_cap_charged(bool serial_return) {
   
   while(true) {
     if(millis()>t) {
-      t += 2000;
+      t += 5;
       cap_v = analogRead(A0);
       Serial.println( Vcc*cap_v/1023 );
-      if (cap_v > 1018) { break; }
+      if (cap_v > 1018) { Serial.println("end"); break; }
     }
   }
-  Serial.println("end");
-  //if(serial_return) { Serial.println("1"); } // signal process complete
+  
+  if(serial_return) { Serial.println("1"); } // signal process complete
 }
 
 void set_pwr_low() { digitalWrite(8, LOW); }
