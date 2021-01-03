@@ -1338,21 +1338,21 @@ class dis_charge_exp(QThread) :
         
         if self.uController.dis_charge_choice == -1 :
             self.uController.serial.send_command('v')
-            result = self.uController.serial.get_responses(num_responses=1, transpose=False, response_types="f")
+            #result = self.uController.serial.get_responses(num_responses=1, transpose=False, response_types="f")
             self.cap_prepping()
-            result = self.uController.serial.get_responses(num_responses=1, transpose=False, response_types="f")
+            #result = self.uController.serial.get_responses(num_responses=1, transpose=False, response_types="f")
             return
         elif self.uController.dis_charge_choice == 0 :
             self.uController.serial.send_command('w')
-            result = self.uController.serial.get_responses(num_responses=1, transpose=False, response_types="f")
+            #result = self.uController.serial.get_responses(num_responses=1, transpose=False, response_types="f")
             self.cap_prepping()
-            result = self.uController.serial.get_responses(num_responses=1, transpose=False, response_types="f")
+            #result = self.uController.serial.get_responses(num_responses=1, transpose=False, response_types="f")
             self.uController.serial.send_command('b')
         elif self.uController.dis_charge_choice == 1 :
             self.uController.serial.send_command('v')
-            result = self.uController.serial.get_responses(num_responses=1, transpose=False, response_types="f")
+            #result = self.uController.serial.get_responses(num_responses=1, transpose=False, response_types="f")
             self.cap_prepping()
-            result = self.uController.serial.get_responses(num_responses=1, transpose=False, response_types="f")
+            #result = self.uController.serial.get_responses(num_responses=1, transpose=False, response_types="f")
             self.uController.serial.send_command('a')
         else :
             return False
