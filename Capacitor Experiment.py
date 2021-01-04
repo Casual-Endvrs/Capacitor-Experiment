@@ -38,11 +38,14 @@ from time import time as current_time
 
 from Arduino import Arduino
 
-def cap_charge(x, Vcc, tc, offset=0) :
-    return Vcc * (1 - np.exp(-(x-offset)/tc) )
+def cap_charge(t, Vcc, tc, offset=0) :
+    return Vcc * (1 - np.exp(-(t-offset)/tc) )
 
-def cap_discharge(x, Vcc, tc) :
-    return Vcc * np.exp(-x/tc)
+def cap_discharge(t, Vcc, tc) :
+    return Vcc * np.exp(-t/tc)
+
+def theoretical_current(t, I_max, tc, offset=0) :
+    return I_max * np.exp(-(t-offset)/tc)
 
 class arduino() :
     def __init__(self) :
@@ -87,7 +90,9 @@ class arduino() :
     
     def disconnect(self) :
         if self.connected :
+            self.serial.send_command("z")
             self.serial.disconnect()
+            self.connected = False
     
     def update_all_parameters(self) :
         attempts = 3
@@ -189,18 +194,11 @@ class intro_page(QWidget) :
         
         self.connect_btn = QPushButton("Connect")
         self.connect_btn.clicked.connect(self.connect_init)
-        #self.connect_btn.clicked.connect(self.connect_to_exp)
         self.connect_btn.setMaximumWidth(max_widget_width)
         self.layout.addWidget(self.connect_btn, 0, 3)
         
         self.lbl_connection_status = QLabel("Connection Status: Disconnected")
         self.layout.addWidget(self.lbl_connection_status, 1, 0, 1, 4)
-        
-        
-        
-        
-        
-        
         
         
         self.instruction_tabs = QTabWidget()
@@ -370,7 +368,7 @@ class intro_page(QWidget) :
     def connect_complete(self) :
         success = self.result_q.get()
         
-        if success == 'Success' :
+        if success :
             self.lbl_connection_status.setText("Connection Status: Connected")
             self.parent.main_tabs.setTabEnabled(1, True)
             self.parent.main_tabs.setTabEnabled(2, True)
@@ -1274,8 +1272,8 @@ class connect_thread(QThread) :
         self.result_q = result_q
     
     def run(self) :
-        success = self.uController.serial.connect()
-        if success == 'Success' :
+        success = self.uController.connect()
+        if success :
             self.uController.update_all_parameters()
         self.result_q.put( success )
 
@@ -1289,12 +1287,16 @@ class dis_charge_exp(QThread) :
         self.result_q = result_q
         self.x_data = []
         self.y_data = []
+        
+        if len(self.canvas.axes.figure.axes) == 2 :
+            self.canvas.axes.figure.axes[1].cla()
     
     def update_plot(self, fit=False) :
         self.canvas.axes.cla()
-        self.canvas.axes.plot(self.x_data, self.y_data, '.')
+        ln1 = self.canvas.axes.plot(self.x_data, self.y_data, '.', label='Exp Results')
         
         if fit and self.uController.dis_charge_choice in [0, 1] :
+            
             Vcc = self.uController.Vcc
             tc = self.uController.R * self.uController.C *1e-6
             params = lmfit.Parameters()
@@ -1306,8 +1308,22 @@ class dis_charge_exp(QThread) :
                 params.add('offset', value=0, vary=True)
                 model = lmfit.Model( cap_charge )
             
-            fit_result = model.fit(self.y_data, params, x=self.x_data, nan_policy='omit')
-            self.canvas.axes.plot(self.x_data, fit_result.best_fit)
+            fit_result = model.fit(self.y_data, params, t=self.x_data, nan_policy='omit')
+            ln2 = self.canvas.axes.plot(self.x_data, fit_result.best_fit, label='Fit Results')
+            
+            if len(self.canvas.axes.figure.axes) == 1 :
+                ax2 = self.canvas.axes.twinx()
+            else :
+                ax2 = self.canvas.axes.figure.axes[1]
+            I_max = 1000 * Vcc / self.uController.R # mA
+            tc = fit_result.params['tc'].value
+            offset = 0
+            if self.uController.dis_charge_choice == 1 :
+                offset = fit_result.params['offset'].value
+            I_t = theoretical_current(np.array(self.x_data), I_max, tc, offset)
+            ln3 = ax2.plot(self.x_data, I_t, 'k--', label='Calculated Current')
+            ax2.set_ylabel("Calculated Current [mA]", fontsize=15)
+            ax2.set_ylim([-0.05, 1.15*np.max(I_t)])
             
             txt_x = 0.6 * self.x_data[-1] 
             txt_y = 0.5 * self.uController.Vcc
@@ -1315,9 +1331,13 @@ class dis_charge_exp(QThread) :
             self.canvas.axes.text(txt_x, txt_y, "Fit Results:", fontsize=15); txt_y -= txt_dy
             # self.canvas.axes.text(txt_x, txt_y, f"Vcc: {fit_result.params['Vcc'].value:.3f} V", fontsize=15); txt_y -= txt_dy
             self.canvas.axes.text(txt_x, txt_y, f"TC: {fit_result.params['tc'].value:.3f} s", fontsize=15); txt_y -= txt_dy
+            
+            lns = ln1 + ln2 + ln3
+            lbls = [ l.get_label() for l in lns ]
+            self.canvas.axes.legend(lns, lbls, loc=0)
         
-        self.canvas.axes.set_xlabel( 'Time [s]' )
-        self.canvas.axes.set_ylabel( 'Voltage Across Capacitor [V]' )
+        self.canvas.axes.set_xlabel( 'Time [s]', fontsize=15 )
+        self.canvas.axes.set_ylabel( 'Voltage Across Capacitor [V]', fontsize=15 )
         
         self.canvas.fig.tight_layout()
         self.canvas.draw()
@@ -1629,7 +1649,7 @@ if __name__ == '__main__' :
     app = QApplication(sys.argv)
     window = MainWindow()
     app.exec_()
-    window.uController.serial.disconnect()
+    window.uController.disconnect()
     sys.exit()
 
 
