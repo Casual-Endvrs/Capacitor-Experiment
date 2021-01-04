@@ -1,5 +1,5 @@
-float R = 2200; // resistance of the resistor
-float C = 220e-6; // 0.01; // 220e-6; // capacitance of the capacitor
+float R = 0; // 2200; // resistance of the resistor
+float C = 0; // 220e-6; // 0.01; // 220e-6; // capacitance of the capacitor
 float tc = R*C; // time constant of the circuit
 int exp_dur = 7; // duration of the experiment as a multiple of tc
 int steps_per_tc = 50; // number of steps per tc

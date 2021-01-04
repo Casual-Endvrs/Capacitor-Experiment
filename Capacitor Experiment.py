@@ -779,6 +779,14 @@ class dis_charge_exp_controls(QWidget) :
         self.running_exp.start()
     
     def initialize_exp(self) :
+        if self.uController.R == 0 or self.uController.C == 0 :
+            title = "Resistor/Capacitor Value Entry Error"
+            msg = '\n'.join(["Either/both of the values for the resistor and/or capacitor are invalid. ",
+                        "Please update the values for your current ciruit and then try again."])
+            warning_window = warningWindow(self)
+            warning_window.build_window(title=title, msg=msg)
+            return
+        
         self.update_dis_charge_choice()
         if self.uController.dis_charge_choice == 0 :
             self.exp_to_run = [2, 0]
@@ -1194,6 +1202,14 @@ class freq_exp_controls(QWidget) :
             self.xy_data = self.result_q.get()
     
     def run_pulse_exp(self) :
+        if self.uController.R == 0 or self.uController.C == 0 :
+            title = "Resistor/Capacitor Value Entry Error"
+            msg = '\n'.join(["Either/both of the values for the resistor and/or capacitor are invalid. ",
+                        "Please update the values for your current ciruit and then try again."])
+            warning_window = warningWindow(self)
+            warning_window.build_window(title=title, msg=msg)
+            return
+        
         self.disable_controls()
         self.btn_stop_pulse_exp.setEnabled(True)
         
