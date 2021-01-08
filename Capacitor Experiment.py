@@ -69,6 +69,8 @@ class arduino() :
         self.pulse_duty_cycle = -1
         
         self.dis_charge_choice = 1
+        
+        self.display_dur = 15
     
     def connect(self) :
         if not self.connected :
@@ -956,6 +958,19 @@ class freq_exp_controls(QWidget) :
         label.setMaximumWidth( max_widget_width )
         self.control_layout.addWidget(label, row, 0); row += 1
         
+        self.lbl_display_dur = QLabel( f"Display n seconds of data: (Current: {self.uController.display_dur:.0f}" )
+        self.lbl_display_dur.setMaximumWidth( max_widget_width )
+        self.control_layout.addWidget(self.lbl_display_dur, row, 0); row += 1
+        
+        self.qle_display_dur = QLineEdit()
+        self.qle_display_dur.setMaximumWidth( max_widget_width )
+        self.control_layout.addWidget(self.qle_display_dur, row, 0); row += 1
+        
+        self.btn_display_dur = QPushButton("Update Display Duration")
+        self.btn_display_dur.setMaximumWidth( max_widget_width )
+        self.btn_display_dur.clicked.connect(self.update_display_dur)
+        self.control_layout.addWidget(self.btn_display_dur, row, 0); row += 1
+        
         self.btn_run_pulse_exp = QPushButton("Run Experiment")
         self.btn_run_pulse_exp.setMaximumWidth( max_widget_width )
         self.btn_run_pulse_exp.clicked.connect(self.run_pulse_exp)
@@ -995,6 +1010,7 @@ class freq_exp_controls(QWidget) :
         self.btn_set_capacitance.setEnabled(False)
         self.btn_set_pulse_dur.setEnabled(False)
         self.btn_set_pulse_dc.setEnabled(False)
+        self.btn_display_dur.setEnabled(False)
         self.btn_run_pulse_exp.setEnabled(False)
         self.btn_stop_pulse_exp.setEnabled(False)
         self.btn_save_data.setEnabled(False)
@@ -1008,6 +1024,7 @@ class freq_exp_controls(QWidget) :
         self.btn_set_capacitance.setEnabled(True)
         self.btn_set_pulse_dur.setEnabled(True)
         self.btn_set_pulse_dc.setEnabled(True)
+        self.btn_display_dur.setEnabled(True)
         self.btn_run_pulse_exp.setEnabled(True)
         self.btn_stop_pulse_exp.setEnabled(False)
         self.btn_save_data.setEnabled(True)
@@ -1150,7 +1167,7 @@ class freq_exp_controls(QWidget) :
             new_val = int( float(new_val) )
         except :
             title = "Pulse Duty Cycle - Value Error"
-            warning_msg = '\n'.join(["Pulse Duty Cycle must be a number"])
+            warning_msg = '\n'.join(["Pulse Duty Cycle must be a number."])
             warning_window = warningWindow(self)
             warning_window.build_window(title=title, msg=warning_msg)
             return
@@ -1174,6 +1191,28 @@ class freq_exp_controls(QWidget) :
                 warning_window = warningWindow(self)
                 warning_window.build_window(title=title, msg=warning_msg)
     
+    def update_display_dur(self) :
+        new_val = self.qle_display_dur.text()
+        
+        try :
+            new_val = int( float(new_val) )
+        except :
+            title = "Display Duration - Value Error"
+            warning_msg = '\n'.join(["Display Duration must be an integer number."])
+            warning_window = warningWindow(self)
+            warning_window.build_window(title=title, msg=warning_msg)
+            return
+        
+        if new_val < 1 or new_val > 30 :
+            title = "Display Duration - Value Error"
+            warning_msg = '\n'.join(["Display Duration must be an integer between 1 and 30 inclusive."])
+            warning_window = warningWindow(self)
+            warning_window.build_window(title=title, msg=warning_msg)
+            return
+        else :
+            successful = self.uController.display_dur = new_val
+            self.update_param_lbls()
+    
     def update_param_lbls(self) :
         self.disable_controls()
         # self.uController.update_all_parameters()
@@ -1194,6 +1233,7 @@ class freq_exp_controls(QWidget) :
         self.lbl_capacitance.setText( f"Capacitance [uF]: (Current: {self.uController.C:.0f} uF)" )
         self.lbl_pulse_dur.setText( f"Pulse Duration [ms]: (Current: {self.uController.pulse_duration:.0f} ms)" )
         self.lbl_pulse_dc.setText( f"Pulse Duty Cycle [%]: (Current: {self.uController.pulse_duty_cycle:.0f}%)" )
+        self.lbl_display_dur.setText( f"Display n seconds of data: (Current: {self.uController.display_dur:.0f}" )
         self.enable_controls()
     
     def exp_complete(self) :
@@ -1437,6 +1477,7 @@ class pulse_exp(QThread) :
         QThread.__init__(self)
         self.uController = uController
         self.canvas = canvas
+        self.display_dur = 1000*self.uController.display_dur
         
         self.result_q = result_q
         self.x_data = []
@@ -1444,7 +1485,7 @@ class pulse_exp(QThread) :
     
     def update_plot(self) :
         self.canvas.axes.cla()
-        self.canvas.axes.plot(self.x_data, self.y_data)
+        self.canvas.axes.plot(self.x_data[-self.display_dur:], self.y_data[-self.display_dur:])
         self.canvas.fig.tight_layout()
         self.canvas.draw()
     
