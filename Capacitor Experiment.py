@@ -52,7 +52,7 @@ class arduino() :
         self.connected = False
         
         self.port = '/dev/ttyACM0'
-        self.baud = 230400
+        self.baud = 250000
         self.serial = Arduino(self.port, self.baud, timeout=1, eol='/')
         
         """
@@ -209,8 +209,8 @@ class intro_page(QWidget) :
             "Important Note:",
             "Arduino micro-controllers are only designed to provide a peak current of 50 ma. "
             "This experiment uses an RC circuit; a circuit composed of a resistor (R) and a capacitor (C). "
-            "To protect the micro-controller, always use a resistor that has a resistance of 250 Ohms or greater. "
-            "This software is setup to require a resistance of 250 Ohms or more. This is done as a reminder to "
+            "To protect the micro-controller, always use a resistor that has a resistance of 500 Ohms or greater. "
+            "This software is setup to require a resistance of 500 Ohms or more. This is done as a reminder to "
             "the user. Do not use a resistor values less than this.",
             "",
             "There is a known issue where the program will present obviously erroneous data or may crash. This is "
@@ -249,7 +249,7 @@ class intro_page(QWidget) :
             "     Vcc [Volts] --> The voltage output of the Arduino. Note: this does not change "
             "the output voltage of the Arduino, it only sets a value used by the software.",
             "     Resistance [Ohms] --> The resistance of the resistor used in the experiment. "
-            "This must have a value of 250 Ohms or greater. Used to determine the circuits time constant.",
+            "This must have a value of 500 Ohms or greater. Used to determine the circuits time constant.",
             "     Capacitance [micro-Farads] --> The capacitance of the capacitor used in the experiment. "
             "Used to determine the circuits time constant.",
             "",
@@ -592,10 +592,10 @@ class dis_charge_exp_controls(QWidget) :
             warning_window = warningWindow(self)
             warning_window.build_window(title=title, msg=warning_msg)
             return
-        elif new_R < 250 :
+        elif new_R < 500 :
             title = "Resistor Value Error - FATAL ERROR"
             warning_msg = '\n'.join([
-                "Resistor values less than 250 Ohms are not accepted. ",
+                "Resistor values less than 500 Ohms are not accepted. ",
                 "This is to protect the Arduino as it can only supply a ",
                 "limited current of 50 mA. Use a higher value resistor to ",
                 "limit current and protect your Arduino."
@@ -1073,10 +1073,10 @@ class freq_exp_controls(QWidget) :
             warning_window = warningWindow(self)
             warning_window.build_window(title=title, msg=warning_msg)
             return
-        elif new_R < 250 :
+        elif new_R < 500 :
             title = "Resistor Value Error - FATAL ERROR"
             warning_msg = '\n'.join([
-                "Resistor values less than 250 Ohms are not accepted. ",
+                "Resistor values less than 500 Ohms are not accepted. ",
                 "This is to protect the Arduino as it can only supply a ",
                 "limited current of 50 mA. Use a higher value resistor to ",
                 "limit current and protect your Arduino."
@@ -1344,6 +1344,8 @@ class dis_charge_exp(QThread) :
         self.x_data = []
         self.y_data = []
         
+        self.font_size = 25
+        
         if len(self.canvas.axes.figure.axes) == 2 :
             self.canvas.axes.figure.axes[1].cla()
     
@@ -1378,22 +1380,27 @@ class dis_charge_exp(QThread) :
                 offset = fit_result.params['offset'].value
             I_t = theoretical_current(np.array(self.x_data), I_max, tc, offset)
             ln3 = ax2.plot(self.x_data, I_t, 'k--', label='Calculated Current')
-            ax2.set_ylabel("Calculated Current [mA]", fontsize=15)
+            ax2.set_ylabel("Calculated Current [mA]", fontsize=self.font_size)
             ax2.set_ylim([-0.05, 1.15*np.max(I_t)])
+            
+            ax2.tick_params(axis='y', labelsize=self.font_size-2)
             
             txt_x = 0.6 * self.x_data[-1] 
             txt_y = 0.5 * self.uController.Vcc
             txt_dy = 0.05 * self.uController.Vcc
-            self.canvas.axes.text(txt_x, txt_y, "Fit Results:", fontsize=15); txt_y -= txt_dy
-            # self.canvas.axes.text(txt_x, txt_y, f"Vcc: {fit_result.params['Vcc'].value:.3f} V", fontsize=15); txt_y -= txt_dy
-            self.canvas.axes.text(txt_x, txt_y, f"TC: {fit_result.params['tc'].value:.3f} s", fontsize=15); txt_y -= txt_dy
+            self.canvas.axes.text(txt_x, txt_y, "Fit Results:", fontsize=self.font_size); txt_y -= txt_dy
+            # self.canvas.axes.text(txt_x, txt_y, f"Vcc: {fit_result.params['Vcc'].value:.3f} V", fontsize=self.font_size); txt_y -= txt_dy
+            self.canvas.axes.text(txt_x, txt_y, f"TC: {fit_result.params['tc'].value:.3f} s", fontsize=self.font_size); txt_y -= txt_dy
             
             lns = ln1 + ln2 + ln3
             lbls = [ l.get_label() for l in lns ]
-            self.canvas.axes.legend(lns, lbls, loc=0)
+            self.canvas.axes.legend(lns, lbls, loc=0, fontsize=self.font_size-2)
         
-        self.canvas.axes.set_xlabel( 'Time [s]', fontsize=15 )
-        self.canvas.axes.set_ylabel( 'Voltage Across Capacitor [V]', fontsize=15 )
+        self.canvas.axes.tick_params(axis='x', labelsize=self.font_size-2)
+        self.canvas.axes.tick_params(axis='y', labelsize=self.font_size-2)
+        
+        self.canvas.axes.set_xlabel( 'Time [s]', fontsize=self.font_size )
+        self.canvas.axes.set_ylabel( 'Voltage Across Capacitor [V]', fontsize=self.font_size )
         
         self.canvas.fig.tight_layout()
         self.canvas.draw()
@@ -1406,7 +1413,7 @@ class dis_charge_exp(QThread) :
         else :
             text = "invalid experiment choice"
         self.canvas.axes.cla()
-        self.canvas.axes.text(0.3, 0.45, text)
+        self.canvas.axes.text(0.3, 0.45, text, fontsize=self.font_size)
         self.canvas.draw()
         
         while True :
@@ -1419,7 +1426,7 @@ class dis_charge_exp(QThread) :
         
         if self.uController.dis_charge_choice == -1 :
             self.canvas.axes.cla()
-            self.canvas.axes.text(0.3, 0.45, 'Capacitor discharged.')
+            self.canvas.axes.text(0.3, 0.45, 'Capacitor discharged.', fontsize=self.font_size)
             self.canvas.draw()
     
     def run(self) :
@@ -1482,10 +1489,19 @@ class pulse_exp(QThread) :
         self.result_q = result_q
         self.x_data = []
         self.y_data = []
+        
+        self.font_size = 25
     
     def update_plot(self) :
         self.canvas.axes.cla()
         self.canvas.axes.plot(self.x_data[-self.display_dur:], self.y_data[-self.display_dur:])
+        
+        self.canvas.axes.set_xlabel('Experiment Duration [seconds]', fontsize=self.font_size)
+        self.canvas.axes.set_ylabel('Voltage Across Capacitor [ volts]', fontsize=self.font_size)
+        
+        self.canvas.axes.tick_params(axis='x', labelsize=self.font_size-2)
+        self.canvas.axes.tick_params(axis='y', labelsize=self.font_size-2)
+        
         self.canvas.fig.tight_layout()
         self.canvas.draw()
     

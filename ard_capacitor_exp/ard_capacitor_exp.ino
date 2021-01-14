@@ -19,7 +19,7 @@ String param; // parsed parameter from pc
 int idx; // index of character
 
 void setup() {
-  Serial.begin(230400);
+  Serial.begin(250000);
   pinMode(8, OUTPUT);
   digitalWrite(8, LOW);
   Serial.setTimeout(1);
